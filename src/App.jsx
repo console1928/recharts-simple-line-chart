@@ -54,22 +54,114 @@ const data = [
   },
 ];
 
+const UV = "uv";
+const PV = "pv";
+const REDCOLOR = "red";
+const WHITECOLOR = "#ffffff";
+
+const chartIdColors = {
+  uv: "#82ca9d",
+  pv: "#8884d8"
+};
+
+const getArithmeticMean = (chartId) => {
+  const chartIdValues = [...data.map((page) => page[chartId])];
+
+  return chartIdValues.reduce((accumulator, currentValue) => accumulator + currentValue) / chartIdValues.length;
+};
+
+const getStandardDeviation = (chartId) => {
+  const chartIdValues = [...data.map((page) => page[chartId])];
+  const arithmeticMean = getArithmeticMean(chartId);
+
+  return Math.sqrt(chartIdValues.reduce((accumulator, currentValue) => accumulator + Math.pow((currentValue - arithmeticMean), 2)) / chartIdValues.length);
+};
+
+const getStandardScoreRange = (chartId) => {
+  return {
+    maximum: getArithmeticMean(chartId) + getStandardDeviation(chartId),
+    minimum: getArithmeticMean(chartId) - getStandardDeviation(chartId)
+  };
+};
+
+const getLinearGradientOffset = (chartId) => {
+  const dataMaximum = Math.max(...data.map((page) => page[chartId]));
+  const dataMinimum = Math.min(...data.map((page) => page[chartId]));
+  const standardScoreRange = getStandardScoreRange(chartId);
+
+  return {
+    maximum: (dataMaximum - standardScoreRange.maximum) / (dataMaximum - dataMinimum),
+    minimum: (dataMaximum - standardScoreRange.minimum) / (dataMaximum - dataMinimum)
+  };
+};
+
+const getDotFillColor = (active, isDotInRange, chartId) => {
+  if (active) {
+    if (isDotInRange) {
+      return chartIdColors[chartId];
+    }
+
+    return REDCOLOR;
+  }
+
+  return WHITECOLOR;
+};
+
+const setLegendTextColor = (value, entry) => {
+  const { dataKey } = entry;
+
+  return <span style={{ color: chartIdColors[dataKey] }}>{value}</span>;
+};
+
+const CustomizedDot = (props) => {
+  const { cx, cy, value, chartId, active, radius } = props;
+  const standardScoreRange = getStandardScoreRange(chartId);
+  const isDotInRange = value >= standardScoreRange.minimum && value <= standardScoreRange.maximum;
+
+  return (
+    <circle
+      cx={cx}
+      cy={cy}
+      r={radius || 3}
+      stroke={isDotInRange ? chartIdColors[chartId] : REDCOLOR}
+      fill={getDotFillColor(active, isDotInRange, chartId)}
+    />
+  );
+};
+
 export default function App() {
   return (
     <ResponsiveContainer width={"100%"} height={300}>
       <LineChart data={data} margin={{ top: 20 }} accessibilityLayer>
-        <CartesianGrid strokeDasharray="3 3" />
-        <XAxis dataKey="name" padding={{ left: 30, right: 30 }} />
+        <CartesianGrid strokeDasharray={"3 3"} />
+        <XAxis dataKey={"name"} padding={{ left: 30, right: 30 }} />
         <YAxis />
         <Tooltip />
-        <Legend />
+        <Legend formatter={setLegendTextColor} />
+        <defs>
+          {Object.keys(chartIdColors).map((chartId) =>
+            <linearGradient key={chartId} id={chartId} x1={"0%"} y1={"0%"} x2={"0%"} y2={"100%"}>
+              <stop offset={getLinearGradientOffset(chartId).maximum} stopColor={REDCOLOR} />
+              <stop offset={getLinearGradientOffset(chartId).maximum} stopColor={chartIdColors[chartId]} />
+              <stop offset={getLinearGradientOffset(chartId).minimum} stopColor={chartIdColors[chartId]} />
+              <stop offset={getLinearGradientOffset(chartId).minimum} stopColor={REDCOLOR} />
+            </linearGradient>
+          )}
+        </defs>
         <Line
           type="monotone"
-          dataKey="pv"
-          stroke="#8884d8"
-          activeDot={{ r: 8 }}
+          dataKey={PV}
+          stroke={`url(#${PV})`}
+          dot={<CustomizedDot chartId={PV} active={false} />}
+          activeDot={<CustomizedDot chartId={PV} active={true} radius={8} />}
         ></Line>
-        <Line type="monotone" dataKey="uv" stroke="#82ca9d"></Line>
+        <Line
+          type="monotone"
+          dataKey={UV}
+          stroke={`url(#${UV})`}
+          dot={<CustomizedDot chartId={UV} active={false} />}
+          activeDot={<CustomizedDot chartId={UV} active={true} />}
+        ></Line>
       </LineChart>
     </ResponsiveContainer>
   );
